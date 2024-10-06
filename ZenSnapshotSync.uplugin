@@ -1,0 +1,19 @@
+﻿{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "ZenSnapshotSync",
+	"Description": "",
+	"Category": "Other",
+	"CreatedBy": "VesCodes",
+	"CreatedByURL": "https://github.com/VesCodes",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"Modules": [
+		{
+			"Name": "ZenSnapshotSync",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		}
+	]
+}

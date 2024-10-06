@@ -10,10 +10,6 @@ public class ZenSnapshotSync : ModuleRules
 		{
 			"Core",
 			"Zen",
-		});
-
-		PrivateDependencyModuleNames.AddRange(new[]
-		{
 			"Json",
 		});
 	}

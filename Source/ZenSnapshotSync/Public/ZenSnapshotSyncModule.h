@@ -33,7 +33,8 @@ class FZenSnapshotSyncModule : public IModuleInterface
 public:
 	virtual void StartupModule() override;
 
-	ZENSNAPSHOTSYNC_API static bool ReadSnapshotDescriptor(const TCHAR* SnapshotDescriptorFilePath, TArray<TSharedPtr<FJsonObject>>& OutSnapshots);
+	ZENSNAPSHOTSYNC_API static bool ReadSnapshotDescriptor(FStringView SnapshotDescriptorJson, TArray<TSharedPtr<FJsonObject>>& Snapshots);
+	ZENSNAPSHOTSYNC_API static bool ReadSnapshotDescriptorFile(const TCHAR* SnapshotDescriptorFilePath, TArray<TSharedPtr<FJsonObject>>& Snapshots);
 
 	ZENSNAPSHOTSYNC_API FZenSnapshotSyncHandle RequestSnapshotSync(const TSharedPtr<FJsonObject>& Snapshot) const;
 	ZENSNAPSHOTSYNC_API FZenSnapshotSyncHandle RequestSnapshotSyncFromFile(FStringView TargetPlatform, FStringView Directory, FStringView FileName) const;

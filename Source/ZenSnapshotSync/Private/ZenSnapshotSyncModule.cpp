@@ -47,7 +47,28 @@ void FZenSnapshotSyncModule::StartupModule()
 	RequestPool = MakeUnique<UE::Zen::FZenHttpRequestPool>(ZenService.GetInstance().GetURL());
 }
 
-bool FZenSnapshotSyncModule::ReadSnapshotDescriptor(const TCHAR* SnapshotDescriptorFilePath, TArray<TSharedPtr<FJsonObject>>& OutSnapshots)
+bool FZenSnapshotSyncModule::ReadSnapshotDescriptor(FStringView SnapshotDescriptorJson, TArray<TSharedPtr<FJsonObject>>& Snapshots)
+{
+	TSharedPtr<FJsonObject> SnapshotDescriptor;
+
+	const TSharedRef<TJsonReader<TCHAR>> JsonReader = TJsonReaderFactory<>::CreateFromView(SnapshotDescriptorJson);
+	if (!FJsonSerializer::Deserialize(JsonReader, SnapshotDescriptor) || !SnapshotDescriptor.IsValid())
+	{
+		return false;
+	}
+
+	const TArray<TSharedPtr<FJsonValue>> SnapshotsArray = SnapshotDescriptor->GetArrayField(TEXT("snapshots"));
+	Snapshots.Reserve(Snapshots.Num() + SnapshotsArray.Num());
+
+	for (const TSharedPtr<FJsonValue>& SnapshotValue : SnapshotsArray)
+	{
+		Snapshots.Add(SnapshotValue->AsObject());
+	}
+
+	return true;
+}
+
+bool FZenSnapshotSyncModule::ReadSnapshotDescriptorFile(const TCHAR* SnapshotDescriptorFilePath, TArray<TSharedPtr<FJsonObject>>& Snapshots)
 {
 	FString SnapshotDescriptorJson;
 	if (!FFileHelper::LoadFileToString(SnapshotDescriptorJson, SnapshotDescriptorFilePath))
@@ -56,28 +77,7 @@ bool FZenSnapshotSyncModule::ReadSnapshotDescriptor(const TCHAR* SnapshotDescrip
 		return false;
 	}
 
-	TSharedPtr<FJsonObject> SnapshotDescriptor;
-
-	const TSharedRef<TJsonReader<TCHAR>> JsonReader = TJsonReaderFactory<>::Create(SnapshotDescriptorJson);
-	if (!FJsonSerializer::Deserialize(JsonReader, SnapshotDescriptor) || !SnapshotDescriptor.IsValid())
-	{
-		UE_LOGFMT(LogZenSnapshotSync, Error, "Failed to deserialize snapshot descriptor file '{File}'", SnapshotDescriptorFilePath);
-		return false;
-	}
-
-	const TArray<TSharedPtr<FJsonValue>> Snapshots = SnapshotDescriptor->GetArrayField(TEXT("snapshots"));
-
-	OutSnapshots.Reserve(Snapshots.Num());
-	for (const TSharedPtr<FJsonValue>& SnapshotValue : Snapshots)
-	{
-		const TSharedPtr<FJsonObject>* Snapshot;
-		if (SnapshotValue->TryGetObject(Snapshot))
-		{
-			OutSnapshots.Add(*Snapshot);
-		}
-	}
-
-	return true;
+	return ReadSnapshotDescriptor(SnapshotDescriptorJson, Snapshots);
 }
 
 FZenSnapshotSyncHandle FZenSnapshotSyncModule::RequestSnapshotSync(const TSharedPtr<FJsonObject>& Snapshot) const
@@ -258,7 +258,7 @@ FZenSnapshotSyncHandle FZenSnapshotSyncModule::RequestSnapshotSync(FStringView T
 	Result = Request->PerformBlockingPost(RequestUri, Payload.AsObjectView());
 	if (Result != FZenHttpRequest::Result::Success || Request->GetResponseCode() != 202)
 	{
-		UE_LOGFMT(LogZenSnapshotSync, Error, "Failed to import oplog '{Oplog}' ({ResponseCode})", TargetPlatform, Request->GetResponseCode());
+		UE_LOGFMT(LogZenSnapshotSync, Error, "Failed to import oplog '{OplogId}' ({ResponseCode})", OplogId, Request->GetResponseCode());
 		return FZenSnapshotSyncHandle();
 	}
 

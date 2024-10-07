@@ -12,19 +12,34 @@ DEFINE_LOG_CATEGORY_STATIC(LogZenSnapshotSync, Log, All);
 
 IMPLEMENT_MODULE(FZenSnapshotSyncModule, ZenSnapshotSync);
 
+const FString& FZenSnapshotDescriptor::GetName() const
+{
+	return Name;
+}
+
+const FString& FZenSnapshotDescriptor::GetTargetPlatform() const
+{
+	return TargetPlatform;
+}
+
 bool FZenSnapshotSyncHandle::IsValid() const
 {
 	return !JobId.IsEmpty();
 }
 
-bool FZenSnapshotSyncHandle::IsCompleted() const
+bool FZenSnapshotSyncHandle::IsComplete() const
 {
-	return bCompleted;
+	return bComplete;
 }
 
-const FString& FZenSnapshotSyncHandle::GetError() const
+bool FZenSnapshotSyncHandle::IsError() const
 {
-	return Error;
+	return !ErrorMessage.IsEmpty();
+}
+
+const FString& FZenSnapshotSyncHandle::GetErrorMessage() const
+{
+	return ErrorMessage;
 }
 
 const FString& FZenSnapshotSyncHandle::GetState() const
@@ -37,38 +52,40 @@ float FZenSnapshotSyncHandle::GetStateProgress() const
 	return StateProgress;
 }
 
-const TArray<FString>& FZenSnapshotSyncHandle::GetMessages() const
-{
-	return Messages;
-}
-
 void FZenSnapshotSyncModule::StartupModule()
 {
 	RequestPool = MakeUnique<UE::Zen::FZenHttpRequestPool>(ZenService.GetInstance().GetURL());
 }
 
-bool FZenSnapshotSyncModule::ReadSnapshotDescriptor(FStringView SnapshotDescriptorJson, TArray<TSharedPtr<FJsonObject>>& Snapshots)
+bool FZenSnapshotSyncModule::ReadSnapshotDescriptorJson(FStringView SnapshotDescriptorJson, TArray<FZenSnapshotDescriptor>& SnapshotDescriptors)
 {
-	TSharedPtr<FJsonObject> SnapshotDescriptor;
+	TSharedPtr<FJsonObject> SnapshotDescriptorRootObject;
 
 	const TSharedRef<TJsonReader<TCHAR>> JsonReader = TJsonReaderFactory<>::CreateFromView(SnapshotDescriptorJson);
-	if (!FJsonSerializer::Deserialize(JsonReader, SnapshotDescriptor) || !SnapshotDescriptor.IsValid())
+	if (!FJsonSerializer::Deserialize(JsonReader, SnapshotDescriptorRootObject) || !SnapshotDescriptorRootObject.IsValid())
 	{
 		return false;
 	}
 
-	const TArray<TSharedPtr<FJsonValue>> SnapshotsArray = SnapshotDescriptor->GetArrayField(TEXT("snapshots"));
-	Snapshots.Reserve(Snapshots.Num() + SnapshotsArray.Num());
+	const TArray<TSharedPtr<FJsonValue>> SnapshotDescriptorValues = SnapshotDescriptorRootObject->GetArrayField(TEXT("snapshots"));
+	SnapshotDescriptors.Reserve(SnapshotDescriptors.Num() + SnapshotDescriptorValues.Num());
 
-	for (const TSharedPtr<FJsonValue>& SnapshotValue : SnapshotsArray)
+	for (const TSharedPtr<FJsonValue>& SnapshotDescriptorValue : SnapshotDescriptorValues)
 	{
-		Snapshots.Add(SnapshotValue->AsObject());
+		const TSharedPtr<FJsonObject>& SnapshotDescriptorObject = SnapshotDescriptorValue->AsObject();
+		if (SnapshotDescriptorObject.IsValid())
+		{
+			FZenSnapshotDescriptor& SnapshotDescriptor = SnapshotDescriptors.Emplace_GetRef();
+			SnapshotDescriptor.Name = SnapshotDescriptorObject->GetStringField(TEXT("name"));
+			SnapshotDescriptor.TargetPlatform = SnapshotDescriptorObject->GetStringField(TEXT("targetplatform"));
+			SnapshotDescriptor.Object = SnapshotDescriptorObject;
+		}
 	}
 
 	return true;
 }
 
-bool FZenSnapshotSyncModule::ReadSnapshotDescriptorFile(const TCHAR* SnapshotDescriptorFilePath, TArray<TSharedPtr<FJsonObject>>& Snapshots)
+bool FZenSnapshotSyncModule::ReadSnapshotDescriptorFile(const TCHAR* SnapshotDescriptorFilePath, TArray<FZenSnapshotDescriptor>& SnapshotDescriptors)
 {
 	FString SnapshotDescriptorJson;
 	if (!FFileHelper::LoadFileToString(SnapshotDescriptorJson, SnapshotDescriptorFilePath))
@@ -77,41 +94,40 @@ bool FZenSnapshotSyncModule::ReadSnapshotDescriptorFile(const TCHAR* SnapshotDes
 		return false;
 	}
 
-	return ReadSnapshotDescriptor(SnapshotDescriptorJson, Snapshots);
+	return ReadSnapshotDescriptorJson(SnapshotDescriptorJson, SnapshotDescriptors);
 }
 
-FZenSnapshotSyncHandle FZenSnapshotSyncModule::RequestSnapshotSync(const TSharedPtr<FJsonObject>& Snapshot) const
+FZenSnapshotSyncHandle FZenSnapshotSyncModule::RequestSnapshotSync(const FZenSnapshotDescriptor& SnapshotDescriptor) const
 {
-	if (Snapshot.IsValid())
+	if (SnapshotDescriptor.Object.IsValid())
 	{
-		const FString SnapshotType = Snapshot->GetStringField(TEXT("type"));
-		const FString TargetPlatform = Snapshot->GetStringField(TEXT("targetplatform"));
+		const FString SnapshotType = SnapshotDescriptor.Object->GetStringField(TEXT("type"));
 
 		if (SnapshotType == TEXT("file"))
 		{
-			const FString Directory = Snapshot->GetStringField(TEXT("directory"));
-			const FString FileName = Snapshot->GetStringField(TEXT("filename"));
+			const FString Directory = SnapshotDescriptor.Object->GetStringField(TEXT("directory"));
+			const FString FileName = SnapshotDescriptor.Object->GetStringField(TEXT("filename"));
 
-			return RequestSnapshotSyncFromFile(TargetPlatform, Directory, FileName);
+			return RequestSnapshotSyncFromFile(SnapshotDescriptor.GetTargetPlatform(), Directory, FileName);
 		}
 
 		if (SnapshotType == TEXT("cloud"))
 		{
-			const FString Host = Snapshot->GetStringField(TEXT("host"));
-			const FString Namespace = Snapshot->GetStringField(TEXT("namespace"));
-			const FString Bucket = Snapshot->GetStringField(TEXT("bucket"));
-			const FString Key = Snapshot->GetStringField(TEXT("key"));
+			const FString Host = SnapshotDescriptor.Object->GetStringField(TEXT("host"));
+			const FString Namespace = SnapshotDescriptor.Object->GetStringField(TEXT("namespace"));
+			const FString Bucket = SnapshotDescriptor.Object->GetStringField(TEXT("bucket"));
+			const FString Key = SnapshotDescriptor.Object->GetStringField(TEXT("key"));
 
-			return RequestSnapshotSyncFromCloud(TargetPlatform, Host, Namespace, Bucket, Key);
+			return RequestSnapshotSyncFromCloud(SnapshotDescriptor.GetTargetPlatform(), Host, Namespace, Bucket, Key);
 		}
 
 		if (SnapshotType == TEXT("zen"))
 		{
-			const FString Host = Snapshot->GetStringField(TEXT("host"));
-			const FString Project = Snapshot->GetStringField(TEXT("projectid"));
-			const FString Oplog = Snapshot->GetStringField(TEXT("oplogid"));
+			const FString Host = SnapshotDescriptor.Object->GetStringField(TEXT("host"));
+			const FString Project = SnapshotDescriptor.Object->GetStringField(TEXT("projectid"));
+			const FString Oplog = SnapshotDescriptor.Object->GetStringField(TEXT("oplogid"));
 
-			return RequestSnapshotSyncFromZen(TargetPlatform, Host, Project, Oplog);
+			return RequestSnapshotSyncFromZen(SnapshotDescriptor.GetTargetPlatform(), Host, Project, Oplog);
 		}
 	}
 
@@ -169,6 +185,11 @@ FZenSnapshotSyncHandle FZenSnapshotSyncModule::RequestSnapshotSync(FStringView T
 
 	const FString ProjectId = FApp::GetZenStoreProjectId();
 	const FStringView OplogId = TargetPlatform;
+
+	if (ProjectId.IsEmpty() || OplogId.IsEmpty())
+	{
+		return FZenSnapshotSyncHandle();
+	}
 
 	TStringBuilder<128> RequestUri;
 	FZenScopedRequestPtr Request(RequestPool.Get());
@@ -272,7 +293,7 @@ bool FZenSnapshotSyncModule::QuerySnapshotSyncStatus(FZenSnapshotSyncHandle& Han
 {
 	using namespace UE::Zen;
 
-	if (Handle.JobId.IsEmpty() || Handle.bCompleted)
+	if (!Handle.IsValid() || Handle.IsComplete() || Handle.IsError())
 	{
 		return false;
 	}
@@ -285,46 +306,37 @@ bool FZenSnapshotSyncModule::QuerySnapshotSyncStatus(FZenSnapshotSyncHandle& Han
 	const FZenHttpRequest::Result Result = Request->PerformBlockingDownload(RequestUri, nullptr, EContentType::CbObject);
 	if (Result != FZenHttpRequest::Result::Success || Request->GetResponseCode() != 200)
 	{
-		Handle.Error = FString(GetResponseBufferAsString(Request->GetResponseBuffer()));
-
-		UE_LOGFMT(LogZenSnapshotSync, Error, "Failed to query job '{JobId}' ({ResponseCode})", Handle.JobId, Request->GetResponseCode());
+		Handle.ErrorMessage = FString(GetResponseBufferAsString(Request->GetResponseBuffer()));
 		return false;
 	}
 
 	const FCbObjectView Response = Request->GetResponseAsObject();
 	const FUtf8StringView Status = Response["Status"].AsString();
 
-	if (Status == "Complete")
-	{
-		Handle.bCompleted = true;
-	}
-	else if (Status == "Aborted")
-	{
-		Handle.bCompleted = true;
-
-		Handle.Error = FString(Response["AbortReason"].AsString());
-		if (Handle.Error.IsEmpty())
-		{
-			Handle.Error = TEXT("Aborted");
-		}
-	}
-
 	Handle.State = FString(Response["CurrentOp"].AsString());
 	Handle.StateProgress = Response["CurrentOpPercentComplete"].AsUInt32() / 100.0f;
 
-	for (FCbFieldView Message : Response["Messages"].AsArrayView())
+	if (Status == "Complete")
 	{
-		Handle.Messages.Emplace(Message.AsString());
+		Handle.bComplete = true;
+		return false;
 	}
 
-	return !Handle.bCompleted;
+	if (Status == "Aborted")
+	{
+		const FUtf8StringView AbortReason = Response["AbortReason"].AsString();
+		Handle.ErrorMessage = AbortReason.IsEmpty() ? TEXT("Aborted") : FString(AbortReason);
+		return false;
+	}
+
+	return true;
 }
 
 bool FZenSnapshotSyncModule::CancelSnapshotSync(const FZenSnapshotSyncHandle& Handle) const
 {
 	using namespace UE::Zen;
 
-	if (Handle.JobId.IsEmpty() || Handle.bCompleted)
+	if (!Handle.IsValid() || Handle.IsComplete() || Handle.IsError())
 	{
 		return false;
 	}

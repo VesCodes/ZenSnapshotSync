@@ -12,46 +12,6 @@ DEFINE_LOG_CATEGORY_STATIC(LogZenSnapshotSync, Log, All);
 
 IMPLEMENT_MODULE(FZenSnapshotSyncModule, ZenSnapshotSync);
 
-const FString& FZenSnapshotDescriptor::GetName() const
-{
-	return Name;
-}
-
-const FString& FZenSnapshotDescriptor::GetTargetPlatform() const
-{
-	return TargetPlatform;
-}
-
-bool FZenSnapshotSyncHandle::IsValid() const
-{
-	return !JobId.IsEmpty();
-}
-
-bool FZenSnapshotSyncHandle::IsComplete() const
-{
-	return bComplete;
-}
-
-bool FZenSnapshotSyncHandle::IsError() const
-{
-	return !ErrorMessage.IsEmpty();
-}
-
-const FString& FZenSnapshotSyncHandle::GetErrorMessage() const
-{
-	return ErrorMessage;
-}
-
-const FString& FZenSnapshotSyncHandle::GetState() const
-{
-	return State;
-}
-
-float FZenSnapshotSyncHandle::GetStateProgress() const
-{
-	return StateProgress;
-}
-
 void FZenSnapshotSyncModule::StartupModule()
 {
 	RequestPool = MakeUnique<UE::Zen::FZenHttpRequestPool>(ZenService.GetInstance().GetURL());
@@ -359,4 +319,24 @@ bool FZenSnapshotSyncModule::CancelSnapshotSync(const FZenSnapshotSyncHandle& Ha
 FUtf8StringView FZenSnapshotSyncModule::GetResponseBufferAsString(const TArray64<uint8>& ResponseBuffer)
 {
 	return FUtf8StringView(reinterpret_cast<const UTF8CHAR*>(ResponseBuffer.GetData()), ResponseBuffer.Num());
+}
+
+FDelegateHandle FZenSnapshotSyncModule::RegisterQuerySnapshotsCallback(FQuerySnapshotsDelegate&& Callback)
+{
+	return OnQuerySnapshots.Add(MoveTemp(Callback));
+}
+
+void FZenSnapshotSyncModule::UnregisterQuerySnapshotsCallback(FDelegateHandle CallbackHandle)
+{
+	OnQuerySnapshots.Remove(CallbackHandle);
+}
+
+bool FZenSnapshotSyncModule::CanQuerySnapshots() const
+{
+	return OnQuerySnapshots.IsBound();
+}
+
+void FZenSnapshotSyncModule::QuerySnapshots(TArray<FZenSnapshotDescriptor>& SnapshotDescriptors) const
+{
+	OnQuerySnapshots.Broadcast(SnapshotDescriptors);
 }

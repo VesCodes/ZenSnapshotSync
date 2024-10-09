@@ -4,41 +4,14 @@
 #include <Experimental/ZenServerInterface.h>
 #include <Modules/ModuleManager.h>
 
-struct FZenSnapshotDescriptor
-{
-	ZENSNAPSHOTSYNC_API const FString& GetName() const;
-	ZENSNAPSHOTSYNC_API const FString& GetTargetPlatform() const;
-
-private:
-	friend class FZenSnapshotSyncModule;
-
-	FString Name;
-	FString TargetPlatform;
-	TSharedPtr<FJsonObject> Object = nullptr;
-};
-
-struct FZenSnapshotSyncHandle
-{
-	ZENSNAPSHOTSYNC_API bool IsValid() const;
-	ZENSNAPSHOTSYNC_API bool IsComplete() const;
-	ZENSNAPSHOTSYNC_API bool IsError() const;
-	ZENSNAPSHOTSYNC_API const FString& GetErrorMessage() const;
-	ZENSNAPSHOTSYNC_API const FString& GetState() const;
-	ZENSNAPSHOTSYNC_API float GetStateProgress() const;
-
-private:
-	friend class FZenSnapshotSyncModule;
-
-	FString JobId;
-	bool bComplete = false;
-	FString ErrorMessage;
-	FString State;
-	float StateProgress = 0.0f;
-};
+#include "ZenSnapshotSyncTypes.h"
 
 class FZenSnapshotSyncModule : public IModuleInterface
 {
 public:
+	DECLARE_MULTICAST_DELEGATE_OneParam(FQuerySnapshotsMulticastDelegate, TArray<FZenSnapshotDescriptor>& SnapshotDescriptors);
+	using FQuerySnapshotsDelegate = FQuerySnapshotsMulticastDelegate::FDelegate;
+
 	virtual void StartupModule() override;
 
 	ZENSNAPSHOTSYNC_API static bool ReadSnapshotDescriptorJson(FStringView SnapshotDescriptorJson, TArray<FZenSnapshotDescriptor>& SnapshotDescriptors);
@@ -51,6 +24,12 @@ public:
 	ZENSNAPSHOTSYNC_API bool QuerySnapshotSyncStatus(FZenSnapshotSyncHandle& Handle) const;
 	ZENSNAPSHOTSYNC_API bool CancelSnapshotSync(const FZenSnapshotSyncHandle& Handle) const;
 
+	ZENSNAPSHOTSYNC_API FDelegateHandle RegisterQuerySnapshotsCallback(FQuerySnapshotsDelegate&& Callback);
+	ZENSNAPSHOTSYNC_API void UnregisterQuerySnapshotsCallback(FDelegateHandle CallbackHandle);
+
+	ZENSNAPSHOTSYNC_API bool CanQuerySnapshots() const;
+	ZENSNAPSHOTSYNC_API void QuerySnapshots(TArray<FZenSnapshotDescriptor>& SnapshotDescriptors) const;
+
 private:
 	static FUtf8StringView GetResponseBufferAsString(const TArray64<uint8>& ResponseBuffer);
 
@@ -58,4 +37,5 @@ private:
 
 	UE::Zen::FScopeZenService ZenService;
 	TUniquePtr<UE::Zen::FZenHttpRequestPool> RequestPool;
+	FQuerySnapshotsMulticastDelegate OnQuerySnapshots;
 };

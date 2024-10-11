@@ -292,7 +292,7 @@ bool FZenSnapshotSyncModule::QuerySnapshotSyncStatus(FZenSnapshotSyncHandle& Han
 	return true;
 }
 
-bool FZenSnapshotSyncModule::CancelSnapshotSync(const FZenSnapshotSyncHandle& Handle) const
+bool FZenSnapshotSyncModule::CancelSnapshotSync(FZenSnapshotSyncHandle& Handle) const
 {
 	using namespace UE::Zen;
 
@@ -312,6 +312,9 @@ bool FZenSnapshotSyncModule::CancelSnapshotSync(const FZenSnapshotSyncHandle& Ha
 		UE_LOGFMT(LogZenSnapshotSync, Error, "Failed to cancel job '{JobId}' ({ResponseCode})", Handle.JobId, Request->GetResponseCode());
 		return false;
 	}
+
+	// Cancellation is treated as completion by Zen server so assume an error state immediately
+	Handle.ErrorMessage = TEXT("Cancelled");
 
 	return true;
 }

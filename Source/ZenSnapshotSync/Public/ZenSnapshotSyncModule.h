@@ -22,7 +22,7 @@ public:
 	ZENSNAPSHOTSYNC_API FZenSnapshotSyncHandle RequestSnapshotSyncFromCloud(FStringView TargetPlatform, FStringView Host, FStringView Namespace, FStringView Bucket, FStringView Key) const;
 	ZENSNAPSHOTSYNC_API FZenSnapshotSyncHandle RequestSnapshotSyncFromZen(FStringView TargetPlatform, FStringView Host, FStringView Project, FStringView Oplog) const;
 	ZENSNAPSHOTSYNC_API bool QuerySnapshotSyncStatus(FZenSnapshotSyncHandle& Handle) const;
-	ZENSNAPSHOTSYNC_API bool CancelSnapshotSync(const FZenSnapshotSyncHandle& Handle) const;
+	ZENSNAPSHOTSYNC_API bool CancelSnapshotSync(FZenSnapshotSyncHandle& Handle) const;
 
 	ZENSNAPSHOTSYNC_API FDelegateHandle RegisterQuerySnapshotsCallback(FQuerySnapshotsDelegate&& Callback);
 	ZENSNAPSHOTSYNC_API void UnregisterQuerySnapshotsCallback(FDelegateHandle CallbackHandle);

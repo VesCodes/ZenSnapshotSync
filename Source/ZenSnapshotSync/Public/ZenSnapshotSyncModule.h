@@ -6,6 +6,8 @@
 
 #include "ZenSnapshotSyncTypes.h"
 
+class FZenSnapshotSyncToolbar;
+
 class FZenSnapshotSyncModule : public IModuleInterface
 {
 public:
@@ -37,5 +39,6 @@ private:
 
 	UE::Zen::FScopeZenService ZenService;
 	TUniquePtr<UE::Zen::FZenHttpRequestPool> RequestPool;
+	TSharedPtr<FZenSnapshotSyncToolbar> Toolbar = nullptr;
 	FQuerySnapshotsMulticastDelegate OnQuerySnapshots;
 };

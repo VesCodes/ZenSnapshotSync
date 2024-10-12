@@ -8,6 +8,8 @@
 #include <Serialization/JsonReader.h>
 #include <Serialization/JsonSerializer.h>
 
+#include "ZenSnapshotSyncToolbar.h"
+
 DEFINE_LOG_CATEGORY_STATIC(LogZenSnapshotSync, Log, All);
 
 IMPLEMENT_MODULE(FZenSnapshotSyncModule, ZenSnapshotSync);
@@ -15,6 +17,7 @@ IMPLEMENT_MODULE(FZenSnapshotSyncModule, ZenSnapshotSync);
 void FZenSnapshotSyncModule::StartupModule()
 {
 	RequestPool = MakeUnique<UE::Zen::FZenHttpRequestPool>(ZenService.GetInstance().GetURL());
+	Toolbar = MakeShared<FZenSnapshotSyncToolbar>();
 }
 
 bool FZenSnapshotSyncModule::ReadSnapshotDescriptorJson(FStringView SnapshotDescriptorJson, TArray<FZenSnapshotDescriptor>& SnapshotDescriptors)

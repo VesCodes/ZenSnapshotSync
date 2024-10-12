@@ -9,8 +9,16 @@ public class ZenSnapshotSync : ModuleRules
 		PublicDependencyModuleNames.AddRange(new[]
 		{
 			"Core",
-			"Zen",
 			"Json",
+			"Zen",
+		});
+
+		PrivateDependencyModuleNames.AddRange(new[]
+		{
+			"Slate",
+			"SlateCore",
+			"TargetPlatform",
+			"ToolMenus",
 		});
 	}
 }
